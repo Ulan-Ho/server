@@ -1,0 +1,207 @@
+  generator client {
+    provider = "prisma-client-js"
+  }
+
+  datasource db {
+    provider = "postgresql"
+    url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
+  }
+
+  model User {
+    id                Int                @id @default(autoincrement())
+    name              String             @unique
+    phoneNumber       String             @unique @map("phone_number")
+    role              String             // patient, doctor, admin
+    avatarUrl         String?            @map("avatar_url")
+    address           String?
+    birthday          DateTime           @map("birth_date")
+    profession        String?            // например, врач, терапевт
+    specialty         String?            // специальность врача
+    workHours         String?            @map("work_hours")// расписание работы врача (например, "9:00 - 18:00")
+    rating            Float?             // рейтинг врача
+    createdAt         DateTime           @default(now()) @map("created_at")
+    updatedAt         DateTime           @updatedAt @map("updated_at")
+
+    medications       MedicationSchedule[] 
+    appointments      Appointment[]      @relation("PatientAppointments") // Пациентские записи
+    doctorAppointments Appointment[]     @relation("DoctorAppointments")  // Врачебные записи
+    messagesSent      ChatMessage[]      @relation("Sender")
+    messagesReceived  ChatMessage[]      @relation("Receiver")
+    orders            Order[]
+    otps              OTP[]              // Связанные OTP коды
+    reviews           Review[]           @relation("DoctorReviews") // Отзывы о враче
+    patientReviews    Review[]           @relation("PatientReviews") // Отзывы пациентов
+    prescriptions     Prescription[]     @relation("DoctorPrescriptions") // Рецепты врача
+    receivedPrescriptions Prescription[] @relation("PatientPrescriptions") // Рецепты пациента
+    PaymentHistory PaymentHistory[]
+
+    @@map("user")
+}
+
+
+
+  model Medication {
+    id                Int                @id @default(autoincrement())
+    name              String             @unique
+    description       String?
+    composition       String?            // Состав препарата
+    indications       String?            // Показания к применению
+    usageMethod       String?            // Способ применения
+    contraindications String?            // Противопоказания
+    sideEffects       String?            // Побочные действия
+    price             Float
+    manufacturer      String?            // Компания-производитель
+    photoUrl          String?            // Ссылка на изображение препарата
+    isOnSale          Boolean?           // Акция (если в акции)
+    stockQuantity     Int                @map("stock_quantity")
+    createdAt         DateTime           @default(now()) @map("created_at")
+    updatedAt         DateTime           @updatedAt @map("updated_at")
+
+    schedules         MedicationSchedule[] 
+    orderItems        OrderItem[]
+    prescriptions     Prescription[]     @relation("MedicationPrescriptions")
+
+    @@map("medication")
+  }
+
+
+
+  model MedicationSchedule {
+    id            Int                @id @default(autoincrement())
+    user          User               @relation(fields: [userId], references: [id])
+    userId        Int                @map("user_id")
+    medication    Medication         @relation(fields: [medicationId], references: [id])
+    medicationId  Int                @map("medication_id")
+    scheduleTime  DateTime           @map("schedule_time")
+    status        String             // taken, missed, pending, skipped
+    createdAt     DateTime           @default(now()) @map("created_at")
+    updatedAt     DateTime           @updatedAt @map("updated_at")
+
+    @@map("medication_schedule")
+  }
+
+
+  model Appointment {
+    id               Int                @id @default(autoincrement())
+    user             User               @relation("PatientAppointments", fields: [userId], references: [id])
+    userId           Int                @map("user_id")
+    doctor           User               @relation("DoctorAppointments", fields: [doctorId], references: [id])
+    doctorId         Int                @map("doctor_id")
+    clinicAddress    String             @map("clinic_address")
+    appointmentDate  DateTime           @map("appointment_date")
+    serviceType      String             // Тип услуги (консультация, осмотр и т.д.)
+    price            Float              // Цена услуги
+    status           String             // scheduled, completed, cancelled
+    paymentMethod    String             // Способ оплаты (карта, наличные и т.д.)
+    createdAt        DateTime           @default(now()) @map("created_at")
+    updatedAt        DateTime           @updatedAt @map("updated_at")
+
+    @@map("appointment")
+  }
+
+  model Order {
+    id           Int                @id @default(autoincrement())
+    createdAt    DateTime           @default(now()) @map("created_at")
+    updatedAt    DateTime           @updatedAt @map("updated_at")
+    totalPrice   Int              @map("total_price")
+    status       String             // pending, shipped, delivered
+
+    user         User?               @relation(fields: [userId], references: [id])
+    userId       Int?                @map("user_id")
+    items        OrderItem[]
+    PaymentHistory PaymentHistory[]
+
+    @@map("order")
+}
+
+  model OrderItem {
+    id           Int                @id @default(autoincrement())
+    quantity     Int
+    price        Float
+
+    order        Order?              @relation(fields: [orderId], references: [id])
+    orderId      Int?                @map("order_id")
+
+    medication   Medication?         @relation(fields: [medicationId], references: [id])
+    medicationId Int?                @map("medication_id")
+
+    createdAt    DateTime           @default(now()) @map("created_at")
+    updatedAt    DateTime           @updatedAt @map("updated_at")
+
+    @@map("order_item")
+  }
+
+
+  model OTP {
+    id          Int      @id @default(autoincrement())
+    phoneNumber String   @map("phone_number") // Номер телефона
+    otpCode     String   @map("otp_code")     // Сгенерированный код
+    expiresAt   DateTime @map("expires_at")   // Время истечения
+    verified    Boolean  @default(false)      // Проверен ли код
+    createdAt   DateTime @default(now()) @map("created_at") // Время создания
+
+    user        User?     @relation(fields: [userId], references: [id])
+    userId      Int?      @map("user_id")
+
+    @@map("otp")
+  }
+
+
+  model ChatMessage {
+    id            Int                @id @default(autoincrement())
+    sender        User               @relation("Sender", fields: [senderId], references: [id])
+    senderId      Int                @map("sender_id")
+    receiver      User               @relation("Receiver", fields: [receiverId], references: [id])
+    receiverId    Int                @map("receiver_id")
+    messageText   String             @map("message_text")
+    attachmentUrl String?            @map("attachment_url")
+    sentAt        DateTime           @default(now())
+
+    @@map("chat_message")
+  }
+
+  model Review {
+    id           Int                @id @default(autoincrement())
+    content      String             // Текст отзыва
+    rating       Int              // Рейтинг от 1 до 5
+    createdAt    DateTime           @default(now()) @map("created_at")
+
+    user         User               @relation("PatientReviews", fields: [userId], references: [id])
+    userId       Int                @map("user_id")  // Пациент, который оставил отзыв
+    doctor       User               @relation("DoctorReviews", fields: [doctorId], references: [id])
+    doctorId     Int                @map("doctor_id") // Врач, о котором оставлен отзыв
+
+    @@map("review")
+  }
+
+
+  model Prescription {
+    id           Int                @id @default(autoincrement())
+    createdAt    DateTime           @default(now()) @map("created_at")
+    updatedAt    DateTime           @updatedAt @map("updated_at")
+
+    doctor       User               @relation("DoctorPrescriptions", fields: [doctorId], references: [id])
+    doctorId     Int                @map("doctor_id")
+    patient      User               @relation("PatientPrescriptions", fields: [patientId], references: [id])
+    patientId    Int                @map("patient_id")
+    medications  Medication[]       @relation("MedicationPrescriptions") // Препараты, которые назначены пациенту
+
+    @@map("prescription")
+  }
+  model PaymentHistory {
+    id          Int       @id @default(autoincrement())
+    amount      Float     // Сумма платежа
+    status      String    // Успешный, отклонённый и т.д.
+    method      String    // Способ оплаты (например, "карта", "наличные")
+    transactionId String? // ID транзакции от платежного провайдера (например, Stripe)
+    createdAt   DateTime  @default(now()) @map("created_at")
+
+    user        User?     @relation(fields: [userId], references: [id])
+    userId      Int?      @map("user_id")
+
+    order       Order?    @relation(fields: [orderId], references: [id])
+    orderId     Int?      @map("order_id")
+
+    @@map("payment_history")
+  }
